@@ -1,6 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TereasMVC.Entidades;
+using TereasMVC.Migrations;
+using TereasMVC.Models;
 using TereasMVC.Servicios;
 
 namespace TereasMVC.Controllers
@@ -10,11 +14,45 @@ namespace TereasMVC.Controllers
     {
         private readonly ApplicationDbContext context;
         private readonly IServicioUsuario servicioUsuario;
+        private readonly IMapper mapper;
 
-        public TareasController(ApplicationDbContext context,IServicioUsuario servicioUsuario)
+        public TareasController(ApplicationDbContext context,
+            IServicioUsuario servicioUsuario,
+            IMapper mapper)
         {
             this.context = context;
             this.servicioUsuario = servicioUsuario;
+            this.mapper = mapper;
+        }
+
+        [HttpGet]
+        public async Task<List<TareaDTO>> Get()
+        {
+            var usuarioId = servicioUsuario.ObtenerUsuarioId();
+            var tareas = await context.Tareas
+                .Where(t => t.UsuarioCreacionId == usuarioId)
+                .OrderBy(t => t.Orden)
+                .ProjectTo<TareaDTO>(mapper.ConfigurationProvider)                
+                .ToListAsync();
+
+            return tareas;
+        }
+
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<Tarea>> Get (int id)
+        {
+            var usuarioId = servicioUsuario.ObtenerUsuarioId();
+            var tarea = await context.Tareas
+                .Include(t => t.Pasos.OrderBy(p => p.Orden))
+                .Include(t => t.ArchivosAdjuntos.OrderBy(a => a.Orden))
+                .FirstOrDefaultAsync(t => t.Id == id && t.UsuarioCreacionId == usuarioId);
+
+            if (tarea is null)
+            {
+                return NotFound();
+            }
+
+            return tarea;
         }
 
         [HttpPost]
@@ -42,6 +80,75 @@ namespace TereasMVC.Controllers
             await context.SaveChangesAsync();
 
             return tarea;
+        }
+
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> EditarTarea(int id, [FromBody] TareaEditarDTO tareaEditarDTO)
+        {
+            var usuarioId = servicioUsuario.ObtenerUsuarioId();
+
+            var tarea = await context.Tareas.FirstOrDefaultAsync(t => t.Id == id && t.UsuarioCreacionId == usuarioId);
+
+            if (tarea == null)
+            {
+                return NotFound();
+            }
+
+            tarea.Titulo = tareaEditarDTO.Titulo;
+            tarea.Descripcion = tareaEditarDTO.Descripcion;
+
+            await context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        [HttpDelete("{id:int}")]
+        public async Task<ActionResult> BorrarTarea(int id)
+        {
+            var usuarioId = servicioUsuario.ObtenerUsuarioId();
+
+            var tarea = await context.Tareas.FirstOrDefaultAsync(t => t.Id == id && t.UsuarioCreacionId == usuarioId);
+
+            if(tarea is null)
+            {
+                return NotFound();
+            }
+
+            context.Remove(tarea);
+
+            await context.SaveChangesAsync();
+            return Ok();
+        }
+
+        [HttpPost("ordenar")]
+        public async Task<IActionResult> Ordenar([FromBody] int[] ids)
+        {
+            var usuarioId = servicioUsuario.ObtenerUsuarioId();
+
+            var tareas = await context.Tareas
+                .Where(t => t.UsuarioCreacionId == usuarioId).ToListAsync();
+
+            var tareasId = tareas.Select(t => t.Id);
+
+            var idsTareasNoPertenecenAlUsuario = ids.Except(tareasId).ToList();
+
+            if (idsTareasNoPertenecenAlUsuario.Any())
+            {
+                return Forbid();
+            }
+
+            var tareasDiccionario = tareas.ToDictionary(x => x.Id);
+
+            for (int i = 0; i < ids.Length; i++)
+            {
+                var id = ids[i];
+                var tarea = tareasDiccionario[id];
+                tarea.Orden = i + 1;
+            }
+
+            await context.SaveChangesAsync();
+
+            return Ok();
         }
 
     }

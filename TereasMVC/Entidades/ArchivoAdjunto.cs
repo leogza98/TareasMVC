@@ -11,6 +11,6 @@ namespace TereasMVC.Entidades
         public string Url { get; set; }
         public string Titulo { get; set; }
         public int Orden { get; set;}
-        public DateTime FechaCracion { get; set; }
+        public DateTime FechaCreacion { get; set; }
     }
 }
