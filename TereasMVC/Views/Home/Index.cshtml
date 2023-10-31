@@ -33,7 +33,7 @@
 
 @section Scripts{
     
-    <script src="~/js/tareas.js" asp-asp-append-version="true"></script>
+    <script src="~/js/tareas.js" asp-append-version="true"></script>
     
     <script>
 
@@ -42,7 +42,7 @@
         function tareaListadoViewModelFn() {
             var self = this;
             self.tareas = ko.observableArray([]);
-            self.cargando = ko .observable(true);
+            self.cargando = ko.observable(true);
 
             self.noHayTareas = ko.pureComputed(function(){
                 if(self.cargando()){
